@@ -13,6 +13,7 @@ You need to configure the mailboxes in the `appsettings.json`.
 ```
 {
   "Cron": {
+    "RunOnce": false,
     "Schedule": "0 0 * * *"
   },
   "Worker": {
@@ -26,7 +27,8 @@ You need to configure the mailboxes in the `appsettings.json`.
       "ImapUsername": "info@your.email",
       "ImapPassword": "base64_encoded_password",
       "TargetLocalFolder": "/path/to/where/extract/junk/mails",
-      "TargetFilenamePrefix": "info_your_email_"
+      "TargetFilenamePrefix": "info_your_email_",
+      "IgnoreSpamMessages": true
     },
     {
       "ImapHost": "your.email.host.tld",
@@ -35,7 +37,8 @@ You need to configure the mailboxes in the `appsettings.json`.
       "ImapUsername": "support@your.email",
       "ImapPassword": "base64_encoded_password",
       "TargetLocalFolder": "/path/to/where/extract/junk/mails",
-      "TargetFilenamePrefix": "support_your_email_"
+      "TargetFilenamePrefix": "support_your_email_",
+      "IgnoreSpamMessages": true
     }
   ]
 }
@@ -47,6 +50,7 @@ In the description below the path to configuration elements is written as a stri
 | Path | Default | Description |
 |----- | ------- | ----------- |
 | Cron -> Schedule | 0 0 * * * | Cron when to run an export, configuration help can be found here: https://crontab.guru/ |
+| Cron -> RunOnce | false | true: run once and stops the program, false: runs every time specified in Cron -> Schedule |
 | Worker -> ProtocolEmlBaseInformation | true | Writes one protocol entry for each exported eml file including the unique id and subject |
 | Mailboxes | | List of mail accounts to export the junk mails from |
 | Mailboxes[] -> ImapHost | | The server hostname to connect to (usually the external name) |
@@ -55,6 +59,7 @@ In the description below the path to configuration elements is written as a stri
 | Mailboxes[] -> ImapPassword | | The password for this account, this needs to be Base64 encoded to also support special characters. Keep in mind this is NOT an encryption of your password. See below how to convert it to Base64 |
 | Mailboxes[] -> TargetLocalFolder | | Folder to save the eml files to, already exported eml files get skipped |
 | Mailboxes[] -> TargetFilenamePrefix | | If you export multiple accounts you should give each one its own prefix |
+| Mailboxes[] -> IgnoreSpamMessages | | true: do not export messages which already got flagges by rspamd as spam, false: export all messages, even already detected spam messages |
 
 ## Base64
 Using Base64 you can encoded a string to a Base64 format. It is used in the configuration for the password. This gives a better possibility to use passwords with special characters without breaking the json format.

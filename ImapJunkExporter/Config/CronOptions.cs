@@ -8,6 +8,8 @@ namespace ImapJunkExporter.Config
 {
     public record CronOptions
     {
+        public bool RunOnce { get; set; }
+
         public string Schedule { get; set; }
     }
 }

@@ -22,6 +22,10 @@ namespace ImapJunkExporter.Config
         [Required]
         public string TargetLocalFolder { get; init; }
 
+        [Required]
+        public bool IgnoreSpamMessages { get; set; }
+
+        [Required]
         public string TargetFilenamePrefix { get; set; }
     }
 }

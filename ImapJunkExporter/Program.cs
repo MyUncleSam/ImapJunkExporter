@@ -66,7 +66,7 @@ internal class Program
 
             while(!UserCanceled) // run till user cancelled the run
             {
-                if(schedule.GetNextOccurrence(DateTime.Now) <= DateTime.Now)
+                if (cronConfig.RunOnce || schedule.GetNextOccurrence(DateTime.Now) <= DateTime.Now)
                 {
                     logger.Info("Worker started");
 
@@ -84,8 +84,16 @@ internal class Program
                     }
                 }
 
-                // wait 30 seconds
-                Task.Delay(TimeSpan.FromSeconds(30)).Wait();
+                if(cronConfig.RunOnce)
+                {
+                    break;
+                }
+
+                if (!cronConfig.RunOnce)
+                {
+                    // only check every 30 seconds
+                    Task.Delay(TimeSpan.FromSeconds(30)).Wait();
+                }
             }
 
             logger.Info("Stopped {ProgramName}", System.AppDomain.CurrentDomain.FriendlyName);

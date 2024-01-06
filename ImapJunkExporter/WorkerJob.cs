@@ -2,6 +2,7 @@
 using MailKit;
 using MailKit.Net.Imap;
 using Microsoft.Extensions.Logging;
+using MimeKit;
 
 namespace ImapJunkExporter
 {
@@ -51,7 +52,13 @@ namespace ImapJunkExporter
 
                             var msg = junkFolder.GetMessage(msgMeta.UniqueId);
 
-                            if(config.ProtocolEmlBaseInformation)
+                            if(mailbox.IgnoreSpamMessages && IsSpamMessage(msg))
+                            {
+                                log.LogInformation("Message already flagged as spam - skipping : {UniqueId}", msgMeta.UniqueId);
+                                continue;
+                            }
+
+                            if (config.ProtocolEmlBaseInformation)
                             {
                                 log.LogInformation("\texported {UniqueId}: {Subject}", msgMeta.UniqueId, msg.Subject);
                             }
@@ -71,6 +78,44 @@ namespace ImapJunkExporter
                     log.LogInformation("Done processing {Mailbox}", mailbox.ImapUsername);
                 }
             }
+        }
+
+        private bool IsSpamMessage(MimeMessage msg)
+        {
+            // get all values of known spam flags
+            var spamFlags = new List<string>()
+            {
+                msg
+                    .Headers
+                    .FirstOrDefault(fd => fd.Field.Equals("X-Spam-Flag", StringComparison.OrdinalIgnoreCase))
+                    ?.Value ?? string.Empty,
+                msg
+                    .Headers
+                    .FirstOrDefault(fd => fd.Field.Equals("X-Spam", StringComparison.OrdinalIgnoreCase))
+                    ?.Value ?? string.Empty
+            };
+
+            var spamFlagsWithValues = spamFlags
+                .Where(w => !string.IsNullOrWhiteSpace(w))
+                .ToList();
+
+            if(!spamFlagsWithValues.Any())
+            {
+                return false;
+            }
+
+            return spamFlagsWithValues
+                .All(a => SpamFlagToBool(a));
+        }
+
+        private bool SpamFlagToBool(string text)
+        {
+            List<string> trueValues = new List<string>()
+            {
+                "yes", "true", "1"
+            };
+
+            return trueValues.Contains(text.ToLower());
         }
     }
 }
