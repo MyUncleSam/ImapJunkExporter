@@ -83,6 +83,9 @@ internal class Program
                         logger.Info("Next run: {NextRun}", schedule.GetNextOccurrence(DateTime.Now));
                     }
                 }
+
+                // wait 30 seconds
+                Task.Delay(TimeSpan.FromSeconds(30)).Wait();
             }
 
             logger.Info("Stopped {ProgramName}", System.AppDomain.CurrentDomain.FriendlyName);
