@@ -33,7 +33,7 @@ You need to configure the mailboxes in the `appsettings.json`.
 ```
 {
   "Schedule": {
-    "Schedule": "0 0 * * *",
+    "Schedule": "0 0/15 * ? * * *",
     "RunOnce": false
   },
   "Worker": {
