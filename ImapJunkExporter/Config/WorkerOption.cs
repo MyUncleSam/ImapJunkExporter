@@ -1,7 +1,13 @@
-﻿namespace ImapJunkExporter.Config
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace ImapJunkExporter.Config
 {
     public record WorkerOption
     {
-        public bool ProtocolEmlBaseInformation { get; set; }
+        [Required]
+        public bool RunOnce { get; init; }
+
+        [Required]
+        public bool ProtocolEmlBaseInformation { get; init; }
     }
 }

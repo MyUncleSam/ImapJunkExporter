@@ -8,79 +8,94 @@ namespace ImapJunkExporter
 {
     internal class WorkerJob : IWorkerJob
     {
-        private IEnumerable<MailboxesOption> mailboxes { get; init; }
+        private IEnumerable<MailboxesOption> Mailboxes { get; init; }
 
-        private ILogger<WorkerJob> log { get; init; }
+        private ILogger<WorkerJob> Log { get; init; }
 
-        private WorkerOption config { get; init; }
+        private WorkerOption Config { get; init; }
 
         public WorkerJob(ILogger<WorkerJob> log, IEnumerable<MailboxesOption> mailboxes, WorkerOption config)
         {
-            this.mailboxes = mailboxes;
-            this.log = log;
-            this.config = config;
+            this.Mailboxes = mailboxes;
+            this.Log = log;
+            this.Config = config;
         }
 
 
-        public void Run()
+        public async Task Run()
         {
-            foreach (var mailbox in mailboxes)
+            foreach (var mailbox in Mailboxes)
             {
-                log.LogInformation("Processing {Mailbox}", mailbox.ImapUsername);
+                Log.LogInformation("Processing {Mailbox}", mailbox.ImapUsername);
 
                 try
                 {
-                    using (var client = new ImapClient())
+                    using var client = new ImapClient();
+
+                    await client.ConnectAsync(mailbox.ImapHost, mailbox.ImapPort, mailbox.ImapUseSsl);
+                    await client.AuthenticateAsync(mailbox.ImapUsername, System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(mailbox.ImapPassword)));
+                    await client.Inbox.OpenAsync(FolderAccess.ReadOnly);
+
+                    var junkFolder = client.GetFolder(SpecialFolder.Junk);
+                    IMailFolder learnedFolder;
+
+                    if (!(await junkFolder.GetSubfoldersAsync()).Any(a => a.Name == mailbox.ImapLearnedFolderName))
                     {
-                        client.Connect(mailbox.ImapHost, mailbox.ImapPort, mailbox.ImapUseSsl);
-                        client.Authenticate(mailbox.ImapUsername, System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(mailbox.ImapPassword)));
-                        client.Inbox.Open(FolderAccess.ReadOnly);
+                        Log.LogInformation("Junk subfolder for learned mails missing, creating subfolder '{LearnedFolderName}' and subscribe to it.", mailbox.ImapLearnedFolderName);
+                        learnedFolder = await junkFolder.CreateAsync(mailbox.ImapLearnedFolderName, true);
+                        await learnedFolder.SubscribeAsync();
+                    }
+                    else
+                    {
+                        learnedFolder = await junkFolder.GetSubfolderAsync(mailbox.ImapLearnedFolderName);
+                    }
 
-                        var junkFolder = client.GetFolder(SpecialFolder.Junk);
-                        junkFolder.Open(FolderAccess.ReadOnly);
+                    await learnedFolder.OpenAsync(FolderAccess.ReadWrite);
+                    await junkFolder.OpenAsync(FolderAccess.ReadWrite);
 
-                        foreach (var msgMeta in junkFolder.Fetch(0, -1, MessageSummaryItems.UniqueId))
+                    foreach (var msgMeta in await junkFolder.FetchAsync(0, -1, MessageSummaryItems.UniqueId))
+                    {
+                        var fileName = $"{mailbox.TargetFilenamePrefix}{msgMeta.UniqueId}.eml";
+                        var exportFile = Path.Combine(mailbox.TargetLocalFolder, fileName);
+
+                        if (File.Exists(exportFile))
                         {
-                            var fileName = $"{mailbox.TargetFilenamePrefix}{msgMeta.UniqueId}.eml";
-                            var exportFile = Path.Combine(mailbox.TargetLocalFolder, fileName);
-
-                            if (File.Exists(exportFile))
-                            {
-                                log.LogInformation("\tfile already exist - skipping file ({fileName})", exportFile);
-                                continue;
-                            }
-
-                            var msg = junkFolder.GetMessage(msgMeta.UniqueId);
-
-                            if(mailbox.IgnoreSpamMessages && IsSpamMessage(msg))
-                            {
-                                log.LogInformation("Message already flagged as spam - skipping : {UniqueId}", msgMeta.UniqueId);
-                                continue;
-                            }
-
-                            if (config.ProtocolEmlBaseInformation)
-                            {
-                                log.LogInformation("\texported {UniqueId}: {Subject}", msgMeta.UniqueId, msg.Subject);
-                            }
-
-                            msg.WriteTo(exportFile);
+                            Log.LogInformation("\tfile already exist - skipping file ({fileName})", exportFile);
+                            await junkFolder.MoveToAsync(msgMeta.UniqueId, learnedFolder);
+                            continue;
                         }
 
-                        junkFolder.Close();
+                        var msg = await junkFolder.GetMessageAsync(msgMeta.UniqueId);
+
+                        if (mailbox.IgnoreSpamMessages && IsSpamMessage(msg))
+                        {
+                            Log.LogInformation("Message already flagged as spam - skipping : {UniqueId}", msgMeta.UniqueId);
+                            continue;
+                        }
+
+                        if (Config.ProtocolEmlBaseInformation)
+                        {
+                            Log.LogInformation("\texported {UniqueId}: {Subject}", msgMeta.UniqueId, msg.Subject);
+                        }
+
+                        await msg.WriteToAsync(exportFile);
+                        await junkFolder.MoveToAsync(msgMeta.UniqueId, learnedFolder);
                     }
+
+                    await junkFolder.CloseAsync();
                 }
                 catch (Exception ex)
                 {
-                    log.LogError(ex, "unable to process {Mailbox}", mailbox.ImapUsername);
+                    Log.LogError(ex, "unable to process {Mailbox}", mailbox.ImapUsername);
                 }
                 finally
                 {
-                    log.LogInformation("Done processing {Mailbox}", mailbox.ImapUsername);
+                    Log.LogInformation("Done processing {Mailbox}", mailbox.ImapUsername);
                 }
             }
         }
 
-        private bool IsSpamMessage(MimeMessage msg)
+        private static bool IsSpamMessage(MimeMessage msg)
         {
             // get all values of known spam flags
             var spamFlags = new List<string>()
@@ -99,7 +114,7 @@ namespace ImapJunkExporter
                 .Where(w => !string.IsNullOrWhiteSpace(w))
                 .ToList();
 
-            if(!spamFlagsWithValues.Any())
+            if(spamFlagsWithValues.Count == 0)
             {
                 return false;
             }
@@ -108,12 +123,12 @@ namespace ImapJunkExporter
                 .All(a => SpamFlagToBool(a));
         }
 
-        private bool SpamFlagToBool(string text)
+        private static bool SpamFlagToBool(string text)
         {
-            List<string> trueValues = new List<string>()
-            {
+            List<string> trueValues =
+            [
                 "yes", "true", "1"
-            };
+            ];
 
             return trueValues.Contains(text.ToLower());
         }

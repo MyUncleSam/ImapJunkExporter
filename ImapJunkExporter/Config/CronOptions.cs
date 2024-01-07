@@ -1,15 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace ImapJunkExporter.Config
 {
     public record CronOptions
     {
-        public bool RunOnce { get; set; }
-
-        public string Schedule { get; set; }
+        [Required]
+        public required string Schedule { get; init; }
     }
 }

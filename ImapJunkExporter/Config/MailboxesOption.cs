@@ -5,7 +5,7 @@ namespace ImapJunkExporter.Config
     public class MailboxesOption
     {
         [Required]
-        public string ImapHost { get; init; }
+        public required string ImapHost { get; init; }
 
         [Required]
         public int ImapPort { get; init; }
@@ -14,18 +14,21 @@ namespace ImapJunkExporter.Config
         public bool ImapUseSsl { get; init; }
 
         [Required]
-        public string ImapUsername { get; init; }
+        public required string ImapUsername { get; init; }
 
         [Required]
-        public string ImapPassword { get; init; }
+        public required string ImapPassword { get; init; }
 
         [Required]
-        public string TargetLocalFolder { get; init; }
+        public required string ImapLearnedFolderName { get; set; }
 
         [Required]
-        public bool IgnoreSpamMessages { get; set; }
+        public required string TargetLocalFolder { get; init; }
 
         [Required]
-        public string TargetFilenamePrefix { get; set; }
+        public bool IgnoreSpamMessages { get; init; }
+
+        [Required]
+        public required string TargetFilenamePrefix { get; init; }
     }
 }

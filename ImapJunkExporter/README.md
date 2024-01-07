@@ -6,6 +6,26 @@ I am using mailcow with an encrypted mail storage. Using it encrypted is secure 
 - export the junk folder to a local folder
 - run a console command to learn all exported mails as junk
 
+# How it works
+
+## Runmode
+You can let this tool run once or by defining a cron job.
+
+## Configuration
+You can configure the tool as needed using the `appsettings.json`. For more details see the `Configuration` part in this readme.
+
+## Workflow
+1. Iterate through all provided mailboxes
+2. Check if Junk subfolder for learned mails is existing, create it if not (and subscribe to it)
+3. Check all mails in this folder
+  1. If the mail was already detected by the spam system ignore it (continue with next mail)
+  2. Export it to the given filesystem path, if the given file already exists the mail gets ignored (but still moved to the `Learned` subfolder)
+  3. Move the mail to the `Learned` subfolder, this prevents a reprocessing
+
+## Export filename
+The exported filename is always `{UniqueId}.eml`. So if the UniqueId is `4711` the export name would be `4711.eml`.
+If you export multiple mails to the same folder you should use the `TargetFilenamePrefix`. Using it result into `{TargetFilenamePrefix}{UniqueId}.eml`. So if you add the prefix `Test_` to the exmple above it would result into `Test_4711.eml`.
+
 # Configuration
 You need to configure the mailboxes in the `appsettings.json`.
 
@@ -13,10 +33,10 @@ You need to configure the mailboxes in the `appsettings.json`.
 ```
 {
   "Cron": {
-    "RunOnce": false,
     "Schedule": "0 0 * * *"
   },
   "Worker": {
+    "RunOnce": false,
     "ProtocolEmlBaseInformation": true
   },
   "Mailboxes": [
@@ -26,6 +46,7 @@ You need to configure the mailboxes in the `appsettings.json`.
       "ImapUseSsl": true,
       "ImapUsername": "info@your.email",
       "ImapPassword": "base64_encoded_password",
+      "ImapLearnedFolderName": "Learned",
       "TargetLocalFolder": "/path/to/where/extract/junk/mails",
       "TargetFilenamePrefix": "info_your_email_",
       "IgnoreSpamMessages": true
@@ -36,6 +57,7 @@ You need to configure the mailboxes in the `appsettings.json`.
       "ImapUseSsl": true,
       "ImapUsername": "support@your.email",
       "ImapPassword": "base64_encoded_password",
+      "ImapLearnedFolderName": "Learned",
       "TargetLocalFolder": "/path/to/where/extract/junk/mails",
       "TargetFilenamePrefix": "support_your_email_",
       "IgnoreSpamMessages": true
@@ -50,16 +72,31 @@ In the description below the path to configuration elements is written as a stri
 | Path | Default | Description |
 |----- | ------- | ----------- |
 | Cron -> Schedule | 0 0 * * * | Cron when to run an export, configuration help can be found here: https://crontab.guru/ |
-| Cron -> RunOnce | false | true: run once and stops the program, false: runs every time specified in Cron -> Schedule |
+| Worker -> RunOnce | false | true: run once and stops the program, false: runs every time specified in Cron -> Schedule |
 | Worker -> ProtocolEmlBaseInformation | true | Writes one protocol entry for each exported eml file including the unique id and subject |
 | Mailboxes | | List of mail accounts to export the junk mails from |
 | Mailboxes[] -> ImapHost | | The server hostname to connect to (usually the external name) |
 | Mailboxes[] -> ImapPort | | The imap port to connect to |
 | Mailboxes[] -> ImapUsername | | The username to login, usually the E-Mail address |
 | Mailboxes[] -> ImapPassword | | The password for this account, this needs to be Base64 encoded to also support special characters. Keep in mind this is NOT an encryption of your password. See below how to convert it to Base64 |
+| Mailboxes[] -> ImapLearnedFolderName | | Name of the Junk subfolder, all exported mails are going to be moved there to avoid double processing. Do not use special characters. |
 | Mailboxes[] -> TargetLocalFolder | | Folder to save the eml files to, already exported eml files get skipped |
 | Mailboxes[] -> TargetFilenamePrefix | | If you export multiple accounts you should give each one its own prefix |
 | Mailboxes[] -> IgnoreSpamMessages | | true: do not export messages which already got flagges by rspamd as spam, false: export all messages, even already detected spam messages |
+
+## Environment variables
+You can also specify configurations using environment variables. This can be useful to run the program with different settings. The program always reads the configuration in the following order. Last one setting a variable wins:
+1. appsettings.json
+2. environment variables.
+
+So using environment variables will always win.
+
+Examples:
+| Environment key=value pair | Description |
+| -------------------------- | ----------- |
+| Cron__Schedule=* * * * * | changes the cron interval to every minute |
+| Worker__RunOnce=true | changes from cron to run only once |
+| Mailboxes:0:ImapHost | changes the ImapHost for the first element in the mailboxes list |
 
 ## Base64
 Using Base64 you can encoded a string to a Base64 format. It is used in the configuration for the password. This gives a better possibility to use passwords with special characters without breaking the json format.
@@ -80,3 +117,58 @@ As an example, you can see here how a Base64 string is decoded back into a norma
 If you want to use it in combination with mailcow I suggest:
 - export the junk from all mail accounts you want to learn rspamd from into a single folder (by using `TargetFilenamePrefix`)
 - use the commandline to learn the messages as spam - see the mailcow documentation https://docs.mailcow.email/manual-guides/Rspamd/u-e-rspamd-work-with-spamdata/#learn-spam-or-ham-from-existing-directory
+
+Example bash script:
+This example does the following steps:
+1. iterate through all files in `/opt/spam_to_learn` (change to the folder where your exported mails are in)
+2. let rspamd learns those messages as spam
+3. deletes the eml file which got learned
+
+```
+#!/bin/bash
+cd /opt/mailcow-dockerized
+
+for file in /opt/imap_junk_exporter/junk/*;
+do
+        docker exec -i $(docker compose ps -q rspamd-mailcow) rspamc learn_spam < "$file"
+        rm "$file"
+done
+
+cd -
+```
+
+# Logging
+If you want or need to change the logging you simply need to change the file `/app/build/NLog.config`. I highly suggest to not edit it inside the container but to overwrite it with a linked file (like `appsettings.json`).
+
+# Docker
+
+## Image
+`ruepp/imapjunkexporter`
+
+## Environment variables
+Not needed by default but see configuration above. For the correct usage of timezones I suggest setting the `TZ` environment parameter.
+
+## Volumes
+| Volume | Type | Description |
+| ------ | ---- | ----------- |
+| /app/build/logging | Folder | log files |
+| /app/build/appsettings.json | File | configuration file |
+| /app/build/NLog.config | File | NLog configuration for logging |
+
+## Example docker-compose.yaml
+```
+version: '3'
+services:
+  junkexporter:
+    image: ruepp/imapjunkexporter
+    container_name: junkexporter
+    restart: unless-stopped
+    volumes:
+      - ./log:/app/build/logging
+      - ./appsettings.json:/app/build/appsettings.json
+      # - ./NLog.config:/app/build/NLog.config
+      - ./junk:/export
+    environment:
+      TZ: Europe/Berlin
+      # CRON__RUNONCE: false
+```

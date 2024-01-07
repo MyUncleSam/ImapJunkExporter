@@ -10,13 +10,12 @@ using NCrontab;
 namespace ImapJunkExporter;
 internal class Program
 {
-    private static NLog.ILogger logger;
+    private static readonly NLog.Logger logger = LogManager.GetCurrentClassLogger();
 
     private static bool UserCanceled { get; set; } = false;
 
-    private static void Main(string[] args)
+    private async static Task Main()
     {
-        logger = LogManager.GetCurrentClassLogger();
         Console.CancelKeyPress += Console_CancelKeyPress;
 
         try
@@ -29,7 +28,7 @@ internal class Program
             logger.Debug("\t- Loading configuiration");
             var config = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
                 .AddEnvironmentVariables()
                 .Build();
 
@@ -66,13 +65,13 @@ internal class Program
 
             while(!UserCanceled) // run till user cancelled the run
             {
-                if (cronConfig.RunOnce || schedule.GetNextOccurrence(DateTime.Now) <= DateTime.Now)
+                if (workerConfig.RunOnce || schedule.GetNextOccurrence(DateTime.Now) <= DateTime.Now)
                 {
                     logger.Info("Worker started");
 
                     try
                     {
-                        worker.Run();
+                        await worker.Run();
                     }
                     catch(Exception ex)
                     {
@@ -84,15 +83,15 @@ internal class Program
                     }
                 }
 
-                if(cronConfig.RunOnce)
+                if(workerConfig.RunOnce)
                 {
                     break;
                 }
 
-                if (!cronConfig.RunOnce)
+                if (!workerConfig.RunOnce)
                 {
-                    // only check every 30 seconds
-                    Task.Delay(TimeSpan.FromSeconds(30)).Wait();
+                    // only check once per second
+                    await Task.Delay(TimeSpan.FromSeconds(1));
                 }
             }
 
@@ -114,7 +113,7 @@ internal class Program
 
     private static void Console_CancelKeyPress(object? sender, ConsoleCancelEventArgs e)
     {
-        logger.Info("User stopped program, please wait till it finished.");
+        logger.Warn("User stopped program. Finishing tasks, please wait.");
         UserCanceled = true;
     }
 
@@ -125,40 +124,4 @@ internal class Program
             Directory.CreateDirectory("logging");
         }
     }
-
-    private static IConfiguration GetConfigBuilder()
-    {
-        var config = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-
-        return config.Build();
-    }
 }
-
-//using (var client = new ImapClient())
-//{
-//    client.Connect("mail.ruepp.email", 993, true);
-//    client.Authenticate("stefan@ruepp.info", System.Text.Encoding.UTF8.GetString(Convert.FromBase64String("")));
-//    client.Inbox.Open(MailKit.FolderAccess.ReadOnly);
-
-//    var junkFolder = client.GetFolder(SpecialFolder.Junk);
-//    junkFolder.Open(FolderAccess.ReadOnly);
-
-//    foreach (var msgMeta in junkFolder.Fetch(0, -1, MessageSummaryItems.UniqueId))
-//    {
-//        var exportFile = $@"D:\Test\eml\{msgMeta.UniqueId}.eml";
-
-//        if(File.Exists(exportFile))
-//        {
-//            continue;
-//        }
-
-//        var msg = junkFolder.GetMessage(msgMeta.UniqueId);
-
-//        Console.WriteLine($"{msgMeta.UniqueId}: '{msg.Subject}'");
-//        msg.WriteTo(exportFile);
-//    }
-
-//    junkFolder.Close();
-//}
