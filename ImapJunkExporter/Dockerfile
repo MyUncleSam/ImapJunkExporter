@@ -12,4 +12,6 @@ RUN dotnet publish -c Release --property:PublishDir=/app/build
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app/build
 COPY --from=build-env /app/build .
+
+VOLUME ["/app/build/logging"]
 ENTRYPOINT ["dotnet", "ImapJunkExporter.dll"]

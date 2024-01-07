@@ -3,12 +3,13 @@ using MailKit;
 using MailKit.Net.Imap;
 using Microsoft.Extensions.Logging;
 using MimeKit;
+using Quartz;
 
 namespace ImapJunkExporter
 {
-    internal class WorkerJob : IWorkerJob
+    internal class WorkerJob : IWorkerJob, IJob
     {
-        private IEnumerable<MailboxesOption> Mailboxes { get; init; }
+        private IEnumerable<MailboxesOption> ConfigMailboxes { get; init; }
 
         private ILogger<WorkerJob> Log { get; init; }
 
@@ -16,15 +17,19 @@ namespace ImapJunkExporter
 
         public WorkerJob(ILogger<WorkerJob> log, IEnumerable<MailboxesOption> mailboxes, WorkerOption config)
         {
-            this.Mailboxes = mailboxes;
+            this.ConfigMailboxes = mailboxes;
             this.Log = log;
             this.Config = config;
         }
 
-
-        public async Task Run()
+        public async Task Execute(IJobExecutionContext context)
         {
-            foreach (var mailbox in Mailboxes)
+            await Execute();
+        }
+
+        public async Task Execute()
+        {
+            foreach (var mailbox in ConfigMailboxes)
             {
                 Log.LogInformation("Processing {Mailbox}", mailbox.ImapUsername);
 

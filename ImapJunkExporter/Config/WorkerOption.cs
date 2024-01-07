@@ -5,9 +5,6 @@ namespace ImapJunkExporter.Config
     public record WorkerOption
     {
         [Required]
-        public bool RunOnce { get; init; }
-
-        [Required]
-        public bool ProtocolEmlBaseInformation { get; init; }
+        public bool ProtocolEmlBaseInformation { get; init; } = true;
     }
 }

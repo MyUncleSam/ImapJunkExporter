@@ -32,11 +32,11 @@ You need to configure the mailboxes in the `appsettings.json`.
 ## Example
 ```
 {
-  "Cron": {
-    "Schedule": "0 0 * * *"
+  "Schedule": {
+    "Schedule": "0 0 * * *",
+    "RunOnce": false
   },
   "Worker": {
-    "RunOnce": false,
     "ProtocolEmlBaseInformation": true
   },
   "Mailboxes": [
@@ -71,8 +71,8 @@ In the description below the path to configuration elements is written as a stri
 
 | Path | Default | Description |
 |----- | ------- | ----------- |
-| Cron -> Schedule | 0 0 * * * | Cron when to run an export, configuration help can be found here: https://crontab.guru/ |
-| Worker -> RunOnce | false | true: run once and stops the program, false: runs every time specified in Cron -> Schedule |
+| Schedule -> Cron | 0 0/15 * ? * * * | Quartz cron expression when to run an export, configuration help can be found here: https://freeformatter.com/cron-expression-generator-quartz.html |
+| Schedule -> RunOnce | false | true: run once and stops the program, false: runs every time specified in Cron -> Schedule |
 | Worker -> ProtocolEmlBaseInformation | true | Writes one protocol entry for each exported eml file including the unique id and subject |
 | Mailboxes | | List of mail accounts to export the junk mails from |
 | Mailboxes[] -> ImapHost | | The server hostname to connect to (usually the external name) |
@@ -94,9 +94,10 @@ So using environment variables will always win.
 Examples:
 | Environment key=value pair | Description |
 | -------------------------- | ----------- |
-| Cron__Schedule=* * * * * | changes the cron interval to every minute |
-| Worker__RunOnce=true | changes from cron to run only once |
+| Schedule__Cron=*/10 * * ? * * * | changes the cron interval to every 10 seconds |
+| Schedule__RunOnce=true | changes from cron to run only once |
 | Mailboxes:0:ImapHost | changes the ImapHost for the first element in the mailboxes list |
+(Instead of `__` you can also use `:` like `Schedule__Cron` can also be written `Schedule:Cron`.)
 
 ## Base64
 Using Base64 you can encoded a string to a Base64 format. It is used in the configuration for the password. This gives a better possibility to use passwords with special characters without breaking the json format.
@@ -171,4 +172,10 @@ services:
     environment:
       TZ: Europe/Berlin
       # CRON__RUNONCE: false
+```
+
+## Example docker run
+This example runs the container and removes it directly after it finished.
+```
+docker run --rm -v ./log:/app/build/logging -v ./appsettings.json:/app/build/appsettings.json -e TZ=Europe/Berlin -e Schedule__RunOnce=true ruepp/imapjunkexporter
 ```

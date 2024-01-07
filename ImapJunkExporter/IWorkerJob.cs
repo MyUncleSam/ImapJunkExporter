@@ -2,6 +2,6 @@
 {
     internal interface IWorkerJob
     {
-        public Task Run();
+        public Task Execute();
     }
 }
