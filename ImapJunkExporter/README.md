@@ -127,10 +127,12 @@ This example does the following steps:
 
 ```
 #!/bin/bash
-cd /opt/mailcow-dockerized
 
-for file in /opt/imap_junk_exporter/junk/*;
-do
+junkFolder="/opt/spam_to_learn"
+
+cd /opt/mailcow-dockerized # path where your mailcow docker-compose.yaml file lives
+
+for file in `find "$junkFolder" -name "*.eml" -type f`; do
         docker exec -i $(docker compose ps -q rspamd-mailcow) rspamc learn_spam < "$file"
         rm "$file"
 done
